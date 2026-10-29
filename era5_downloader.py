@@ -503,14 +503,19 @@ def run_downloads(config: DownloadConfig, partitions: List[Partition],
     for key_name, key_partitions in partitions_by_key.items():
         logger.info(f"  [{key_name}]: {len(key_partitions)} partitions")
 
-    # Create a thread pool - each thread submits a request to ECMWF and waits for it
-    # This limits how many requests we keep "in-flight" at once
-    max_workers = len(config.api_keys) * requests_per_key
+    # One thread pool PER API key, each sized to requests_per_key. A key's pool
+    # only runs that key's partitions, so no key can exceed requests_per_key
+    # in-flight and a slow key can't steal another key's slots.
+    executors = {
+        key.name: ThreadPoolExecutor(max_workers=requests_per_key)
+        for key in config.api_keys
+    }
 
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        # Submit all downloads
+    try:
+        # Submit each partition to its own key's pool
         future_to_partition = {}
         for partition in partitions:
+            executor = executors[partition.api_key.name]
             future = executor.submit(download_partition, partition, config, dry_run, force_download)
             future_to_partition[future] = partition
 
@@ -525,6 +530,9 @@ def run_downloads(config: DownloadConfig, partitions: List[Partition],
             if time.time() - last_update > 5:
                 logger.info(stats.get_progress())
                 last_update = time.time()
+    finally:
+        for executor in executors.values():
+            executor.shutdown()
 
     # Calculate total time
     total_time = time.time() - start_time

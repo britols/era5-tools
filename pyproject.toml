@@ -5,9 +5,10 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "bokeh>=3.9.0",
     "cartopy>=0.25.0",
     "cdsapi>=0.7.7",
-    "dask>=2025.11.0",
+    "dask[distributed]>=2025.11.0",
     "h5netcdf>=1.7.3",
     "ipykernel>=7.1.0",
     "matplotlib>=3.10.7",
